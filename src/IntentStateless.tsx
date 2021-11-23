@@ -1,5 +1,22 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef } from "react";
 import { Container, Form, Row, Col, Button } from "react-bootstrap";
+
+function replace<T>(source: T[], oldItem: T, newItem: T) {
+    return source.map(item => item === oldItem ? newItem : item);
+}
+
+function put<T>(source: T[], idx: number, newItem: T) {
+    return source.map((item, i) => i === idx ? newItem : item);
+}
+
+function remove<T>(source: T[], idx: number) {
+    return source.filter((_, i) => i !== idx);
+}
+
+function add<T>(source: T[], newItem: T) {
+    return [...source, newItem];
+};
+
 
 const createKeyGen = () => {
     const initVal = Date.now();
@@ -19,14 +36,7 @@ function withKeyGen<T>(source?: any[]) {
 
     return (extMap: (it: any, ix: number, k: KeyGenerator) => T) => {
 
-        let foo;
-        if (!source || !Array.isArray(source)) {
-            foo = [];
-        } else {
-            foo = source;
-        };
-
-        return foo.map((item, idx) => {
+        return (source??[]).map((item, idx) => {
             return extMap(item, idx, keyGenerator);
         });
     }
@@ -42,12 +52,14 @@ interface PrescriptionItemModel {
 }
 
 interface PrescriptionItemProps {
+    theKey: string
     data: PrescriptionItemModel
+    onDataChange?: (newValue: PrescriptionItemModel) => void
+    onFractionsChange?: (frNum: number) => void
     isBoost?: boolean
     canEditDose: boolean
     canDelete: boolean
     onDelete?: () => void
-    onFractionsChange?: (frNum: number) => void
 };
 
 const PrescriptionItem = (props: PrescriptionItemProps) => {
@@ -57,25 +69,23 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
     const btnRef = useRef<HTMLButtonElement>(null);
     const [dosePerFrac, setDosePerFrac] = useState<number>(data.dosePerFraction);
 
-
     const dataProps = props.isBoost
         ? { value: data.numOfFractions }
-        : { defaultValue: data.numOfFractions };
-
+        : { value: data.numOfFractions };
 
     return (
         <Container>
-            { console.log("Here I am, PrescriptionItem render.", data) }
+            { console.log("Here I am, PrescriptionItem render.", props) }
             <Row className="align-items-end">
                 <Col>
                     <Form.Group>
                         { !isBoost && <Form.Label>Num Frac</Form.Label> }
                         <Form.Control
                             { ... dataProps }
-                            readOnly={props.isBoost}
-                            plaintext={props.isBoost}
+                            readOnly={isBoost}
+                            plaintext={isBoost}
                             style={{textAlign: 'right'}}
-                            onChange={ e => props.onFractionsChange && props.onFractionsChange(Number(e.target.value)) }
+                            onChange={ e => props.onFractionsChange!(Number(e.target.value)) }
                         />
                     </Form.Group>
                 </Col>
@@ -96,10 +106,10 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
                         <Form.Control
                             readOnly={!props.canEditDose}
                             plaintext={!props.canEditDose}
-                            defaultValue={data.dosePerFraction}
+                            value={data.dosePerFraction}
                             style={{textAlign: 'right'}}
-                            onChange={ e => {                                
-                                data.dosePerFraction = (Number(e.target.value));
+                            onChange={ e => {
+                                props.onDataChange!({...data, dosePerFraction: Number(e.target.value)})
                                 setDosePerFrac(Number(e.target.value));
                             }}
                         />
@@ -133,8 +143,19 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
                         { !isBoost && <Form.Label>Target</Form.Label>}
                         <Form.Control
                             readOnly={!props.canEditDose}                                                        
-                            defaultValue={data.targetVolume}
-                            onChange={ e => data.targetVolume = e.target.value }
+                            defaultValue={data.targetVolume}                            
+                            onChange={ e => props.onDataChange!({...data, targetVolume: e.target.value}) }
+                        />
+                    </Form.Group>
+                </Col>
+                <Col>
+                <Form.Group>
+                    { !isBoost && <Form.Label>Timestamp</Form.Label>}
+                        <Form.Control
+                            readOnly
+                            plaintext
+                            style={{textAlign: 'right'}}
+                            value={data.timestamp.toTimeString()}
                         />
                     </Form.Group>
                 </Col>
@@ -163,123 +184,50 @@ interface PrescriptionModel {
 
 interface PrescriptionProps {
     data: PrescriptionModel
+    onDataChanged: (newValue: PrescriptionItemModel[]) => void
 };
 
-function useList<S>(source: S[]) {
-
-    const [items, setItems] = useState(source);
-
-    const removeItem = (idx: number) => {
-        if (idx === 0) { return; }
-
-        setItems(
-            items.filter((_, i) => i !== idx)
-        );
-    };
-
-    const addItem = (newItem: S) => {
-        setItems([...items, newItem]);
-    };
-
-    return { items, setItems, removeItem, addItem }
-}
-
-function useResetableList<S>(source: S[]) {
-
-    const [isInitializing, setInitializing] = useState(true);
-    const [items, setItems] = useState(source);
-
-    const removeItem = (idx: number) => {
-        if (idx === 0) { return; }
-
-        setItems(
-            items.filter((_, i) => i !== idx)
-        );
-    };
-
-    const addItem = (newItem: S) => {
-        setItems([...items, newItem]);
-    };
-
-    useMemo(() => {
-        if (isInitializing) {
-            setInitializing(false);
-        } else {
-            setItems(source);
-        }
-    }, [isInitializing, source]);
-
-    return { items, setItems, removeItem, addItem }
-}
 
 const Prescription = (props: PrescriptionProps) => {
 
-    console.log("Prescription is going to call `useList`", props.data.items);
-   
-    const { items, setItems, removeItem, addItem } = useResetableList(props.data.items);
+    const data = props.data;
 
-    /*
-    const [isInitializing, setInitializing] = useState(true);
-    const { items, setItems, removeItem, addItem } = useList(props.data.items);
-
-    useMemo(() => {
-        if (isInitializing) {
-            setInitializing(false);
-        } else {
-            setItems(props.data.items);
-        }
-    }, [props.data.items]);
-    */
-    
-    
-    console.log("This is what `useList` thinks about state", items);
-
-    const updateFractionNumber = (frNum: number) => {
-        const newItems = items.map(item => ({...item, numOfFractions: frNum}));
-        setItems(newItems);
+    const updateNumOfFractions = (frNum: number) => {
+        return data.items.map(item => ({...item, numOfFractions: frNum}));
     }
-
-    const createKey = createKeyGen();
 
     return(
         <Container className="p-3">
-        {console.log("Reporting to duty, rendering Prescription", items, props.data.items)}
-            {/*
-            {false && items && items.map((item, idx) => {
-                const key = createKey(item.id, idx);
+        {console.log("Reporting to duty, rendering Prescription", data.items)}
+            {withKeyGen(data.items)((item, idx, generateKey) => {
+                const theKey = generateKey(item.id, idx); 
                 return (
                     <PrescriptionItem
-                        key={key}
+                        key={theKey}
+                        theKey={theKey}
                         data={item}
                         isBoost={idx > 0}
                         canDelete={idx > 0}
-                        canEditDose={props.data.canEditDose}                        
-                        onDelete={ () => removeItem(idx) }
-                        onFractionsChange={(frNum) => updateFractionNumber(frNum)}
-                    />)
-            })}
-            */}
-            {withKeyGen(items)((item, idx, generateKey) => {
-                return (
-                    <PrescriptionItem
-                        key={generateKey(item.id, idx)}
-                        data={item}
-                        isBoost={idx > 0}
-                        canDelete={idx > 0}
-                        canEditDose={props.data.canEditDose}                        
-                        onDelete={ () => removeItem(idx) }
-                        onFractionsChange={(frNum) => updateFractionNumber(frNum)}
+                        canEditDose={data.canEditDose}
+                        //onDataChange={newData => props.onDataChanged(replace(data.items, item, newData))}
+                        onDataChange={newData => props.onDataChanged(put(data.items, idx, newData))}
+                        onFractionsChange={(frNum) => props.onDataChanged(updateNumOfFractions(frNum)) }
+                        // if needed, this can be delegated to parent
+                        onDelete={ () => props.onDataChanged(remove(data.items, idx)) }                        
                     />)
             })}
             
             <Button
-                onClick={ (e) => addItem({
-                    id: 0,
-                    numOfFractions: items[0].numOfFractions,
-                    dosePerFraction: 0,
-                    targetVolume: "",
-                    timestamp: new Date()
-                })}
+                onClick={ _ => props.onDataChanged(add(
+                    data.items,
+                    {
+                        id: 0,
+                        numOfFractions: data.items[0].numOfFractions,
+                        dosePerFraction: 0,
+                        targetVolume: "",
+                        timestamp: new Date()
+                    }))
+                }
             >
                 More boost
             </Button>
@@ -296,15 +244,15 @@ const initialPrescription = [
 ];
 
 const refinedPrescription = [
-    {id: 111, numOfFractions: 4, dosePerFraction: 3.14, targetVolume: "PTV1", timestamp: onStart},
-    {id: 122, numOfFractions: 4, dosePerFraction: 2.78, targetVolume: "PTV2", timestamp: onStart},
-    {id: 133, numOfFractions: 4, dosePerFraction: 1.11, targetVolume: "PTV3", timestamp: onStart},
+    {id: 111, numOfFractions: 4, dosePerFraction: 3.24, targetVolume: "PTV1", timestamp: onStart},
+    {id: 122, numOfFractions: 4, dosePerFraction: 2.88, targetVolume: "PTV2", timestamp: onStart},
+    {id: 133, numOfFractions: 4, dosePerFraction: 1.21, targetVolume: "PTV3", timestamp: onStart},
 ];
 
 const Intent = () => {
 
-    const [ p1, setP1 ] = useState(initialPrescription);
-    const [ p2, setP2 ] = useState(refinedPrescription);
+    const [ p1, setP1 ] = useState<PrescriptionItemModel[]>(initialPrescription);
+    const [ p2, setP2 ] = useState<PrescriptionItemModel[]>(refinedPrescription);
 
     return (    
     <Container className="p-3">
@@ -315,6 +263,7 @@ const Intent = () => {
                 items: p1,
                 canEditDose: false
             }}
+            onDataChanged={ newP => setP1(newP) }
         />
       </Row>
       <Row>      
@@ -323,10 +272,11 @@ const Intent = () => {
                 items: p2,
                 canEditDose: true
             }}
+            onDataChanged={ newP => setP2(newP) }
         />
       </Row> 
       <Row>
-          <Button
+          <Button className={"m-1"}
             onClick={e => {
                 setP1([...initialPrescription]);
                 setP2([...refinedPrescription]);
@@ -334,6 +284,24 @@ const Intent = () => {
             }}
           >
               Reset
+          </Button>
+          <Button className={"m-1"}
+            onClick={e => {
+
+                console.log("Saving...", p1, p2)
+
+                const newTimestamp = new Date();
+                const newP1 = initialPrescription.map(p => ({ ...p, timestamp: newTimestamp}))
+                const newP2 = refinedPrescription.map(p => ({ ...p, timestamp: newTimestamp}))
+                
+                setP1(newP1);
+                setP2(newP2);
+
+                console.log("New time...", newTimestamp)
+                console.log("New state...", newP1, newP2)
+            }}
+          >
+              Save
           </Button>
       </Row>
     </Container>    

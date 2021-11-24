@@ -17,6 +17,29 @@ function add<T>(source: T[], newItem: T) {
     return [...source, newItem];
 };
 
+function set<T>(source: T, update: (target: T) => void) {
+    const shallowCopy = { ...source } as T;
+    update(shallowCopy);
+    return shallowCopy;
+}
+
+type Updater<T> = (target: T) => void;
+type ChangeHandler<T> = (newValue: T) => void;
+
+function notifier<T>(onChange?: ChangeHandler<T>) {
+    return (source: T, update: Updater<T>) => {
+        const updated = set(source, update);
+        onChange && onChange(updated);
+    };
+}
+
+function thatOrNop<T>(onChange?: ChangeHandler<T>) {
+    if (onChange) {
+        return onChange;
+    } else {
+        return (_: T) => { /* NOP */ } ;
+    }
+}
 
 const createKeyGen = () => {
     const initVal = Date.now();
@@ -64,14 +87,17 @@ interface PrescriptionItemProps {
 
 const PrescriptionItem = (props: PrescriptionItemProps) => {
 
-    const { data, isBoost } = props;
-    
     const btnRef = useRef<HTMLButtonElement>(null);
+
+    const { data, isBoost } = props;
+    const notify = notifier(props.onDataChange);
+
+    const onFractionsChange = thatOrNop(props.onFractionsChange);
 
     const dataProps = props.isBoost
         ? { value: data.numOfFractions }
         : { value: data.numOfFractions };
-
+   
     return (
         <Container>
             { console.log("Here I am, PrescriptionItem render.", props) }
@@ -84,7 +110,7 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
                             readOnly={isBoost}
                             plaintext={isBoost}
                             style={{textAlign: 'right'}}
-                            onChange={ e => props.onFractionsChange!(Number(e.target.value)) }
+                            onChange={ e => onFractionsChange(Number(e.target.value)) }
                         />
                     </Form.Group>
                 </Col>
@@ -107,9 +133,7 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
                             plaintext={!props.canEditDose}
                             value={data.dosePerFraction}
                             style={{textAlign: 'right'}}
-                            onChange={ e => {
-                                props.onDataChange!({...data, dosePerFraction: Number(e.target.value)})
-                            }}
+                            onChange={ e => notify(data, d => d.dosePerFraction = Number(e.target.value)) }
                         />
                     </Form.Group>
                 </Col>
@@ -142,8 +166,7 @@ const PrescriptionItem = (props: PrescriptionItemProps) => {
                         <Form.Control
                             readOnly={!props.canEditDose}                                                        
                             defaultValue={data.targetVolume}
-                            //FocusEvent<Target = Element, RelatedTarget = Element>
-                            onBlur={ (e: FocusEvent<HTMLInputElement>) => props.onDataChange!({...data, targetVolume: e.target.value}) }
+                            onBlur={ (e: FocusEvent<HTMLInputElement>) => notify(data, d => d.targetVolume = e.target.value) }
                         />
                     </Form.Group>
                 </Col>
